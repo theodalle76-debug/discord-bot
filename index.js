@@ -1,4 +1,16 @@
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
+const { 
+  Client, 
+  GatewayIntentBits, 
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  Events,
+  ChannelType,
+  PermissionsBitField
+} = require('discord.js');
+
+require('dotenv').config();
 
 const client = new Client({
   intents: [
@@ -8,11 +20,14 @@ const client = new Client({
   ]
 });
 
-client.once('clientReady', () => {
+client.once(Events.ClientReady, () => {
   console.log('Bot connecté ✅');
 });
 
-// Commandes classiques (!)
+
+// =========================
+// 📌 COMMANDES CLASSIQUES
+// =========================
 client.on('messageCreate', message => {
   if (message.author.bot) return;
 
@@ -21,26 +36,93 @@ client.on('messageCreate', message => {
   }
 });
 
-// Commandes slash (/)
-client.on('interactionCreate', async interaction => {
-  if (!interaction.isChatInputCommand()) return;
 
-  if (interaction.commandName === 'annonce') {
+// =========================
+// 📌 COMMANDES SLASH + TICKETS
+// =========================
+client.on(Events.InteractionCreate, async interaction => {
 
-    const msg = interaction.options.getString('message');
+  // ===== SLASH COMMAND =====
+  if (interaction.isChatInputCommand()) {
 
-    const embed = new EmbedBuilder()
-      .setColor(0xFF4DA6) // rose 💗
-      .setDescription(msg)
-      .setTimestamp();
+    if (interaction.commandName === 'annonce') {
+      const msg = interaction.options.getString('message');
 
-    // ✅ envoie le message dans le salon (visible par tous)
-    await interaction.channel.send({ embeds: [embed] });
+      const embed = new EmbedBuilder()
+        .setColor(0xFF4DA6)
+        .setDescription(msg)
+        .setTimestamp();
 
-    // ✅ réponse invisible (personne voit la commande)
-    await interaction.reply({ content: 'Annonce envoyée ✅', ephemeral: true });
+      await interaction.channel.send({ embeds: [embed] });
+      await interaction.reply({ content: 'Annonce envoyée ✅', ephemeral: true });
+    }
+
+    // commande pour envoyer le bouton ticket
+    if (interaction.commandName === 'ticketpanel') {
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('ticket')
+          .setLabel('🎫 Créer un ticket')
+          .setStyle(ButtonStyle.Primary)
+      );
+
+      await interaction.reply({
+        content: "Clique sur le bouton pour créer un ticket 🎫",
+        components: [row]
+      });
+    }
   }
+
+
+  // ===== BOUTON TICKET =====
+  if (interaction.isButton()) {
+
+    if (interaction.customId === 'ticket') {
+
+      const channel = await interaction.guild.channels.create({
+        name: `ticket-${interaction.user.username}`,
+        type: ChannelType.GuildText,
+        permissionOverwrites: [
+          {
+            id: interaction.guild.id,
+            deny: [PermissionsBitField.Flags.ViewChannel],
+          },
+          {
+            id: interaction.user.id,
+            allow: [PermissionsBitField.Flags.ViewChannel],
+          }
+        ],
+      });
+
+      // bouton fermer
+      const closeRow = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('close_ticket')
+          .setLabel('❌ Fermer le ticket')
+          .setStyle(ButtonStyle.Danger)
+      );
+
+      await channel.send({
+        content: `🎫 ${interaction.user}, ton ticket est ouvert !`,
+        components: [closeRow]
+      });
+
+      await interaction.reply({ content: 'Ticket créé ✅', ephemeral: true });
+    }
+
+
+    // ===== FERMER TICKET =====
+    if (interaction.customId === 'close_ticket') {
+      await interaction.reply({ content: 'Fermeture du ticket...', ephemeral: true });
+
+      setTimeout(() => {
+        interaction.channel.delete();
+      }, 3000);
+    }
+  }
+
 });
 
-require('dotenv').config();
+
 client.login(process.env.TOKEN);
